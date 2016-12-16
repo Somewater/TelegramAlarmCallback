@@ -1,5 +1,8 @@
 package io.relap;
 
+import com.google.common.collect.Lists;
+import org.graylog2.plugin.Message;
+import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
@@ -130,10 +133,42 @@ public class TelegramAlarmCallback implements AlarmCallback {
     private String createRequestMsg(Stream stream, AlertCondition.CheckResult checkResult) {
         String description = checkResult.getResultDescription();
         String title = stream.getTitle();
-        if (title != null)
-            return description.replace("Stream", title);
-        else
-            return description;
+        if (title != null) {
+            description = description.replace("Stream", title);
+		}
+		description = description.replace("\"", "'");
+		List<String> backlog = getAlarmBacklog(checkResult);
+		StringBuilder sb = new StringBuilder("\"");
+		sb.append(description);
+		sb.append(":\\n");
+        for (String message : backlog) {
+			String msg = message.replace("\"", "'");
+            sb.append(msg);
+            sb.append("\\n");
+        }
+		sb.append("\"");
+		return sb.toString();
+    }
+
+    protected List<String> getAlarmBacklog(AlertCondition.CheckResult checkResult) {
+        final AlertCondition alertCondition = checkResult.getTriggeredCondition();
+        final List<MessageSummary> matchingMessages = checkResult.getMatchingMessages();
+
+        final int effectiveBacklogSize = Math.min(alertCondition.getBacklog(), matchingMessages.size());
+
+        if (effectiveBacklogSize == 0) {
+            return Collections.emptyList();
+        }
+
+        final List<MessageSummary> backlogSummaries = matchingMessages.subList(0, effectiveBacklogSize);
+
+        final List<String> backlog = Lists.newArrayListWithCapacity(effectiveBacklogSize);
+
+        for (MessageSummary messageSummary : backlogSummaries) {
+            backlog.add(messageSummary.getMessage());
+        }
+
+        return backlog;
     }
 
     @Override
